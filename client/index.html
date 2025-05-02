@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostgreSQL Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles/main.css">
+    <!-- Adding D3.js for advanced data visualizations -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Adding Chart.js with time plugin for real-time updates -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="scripts/charts.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div id="connectionStatus" class="connection-status" style="display: none;">
+            <i class="fas fa-circle"></i>
+            <span class="status-text"></span>
+            <button class="retry-btn" style="display: none;">
+                <i class="fas fa-sync-alt"></i>
+                Retry Connection
+            </button>
+        </div>
+
+        <div id="loadingState" class="loading-state" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading database...</p>
+        </div>
+
+        <div id="errorState" class="error-state" style="display: none;">
+            <i class="fas fa-exclamation-circle"></i>
+            <p class="error-message"></p>
+            <button class="retry-btn">
+                <i class="fas fa-sync-alt"></i>
+                Retry
+            </button>
+        </div>
+
+        <div class="dashboard-container">
+            <header class="dashboard-header">
+                <div class="header-content">
+                    <h1>PostgreSQL Dashboard</h1>
+                    <nav class="header-nav">
+                        <div class="view-controls">
+                            <button id="gridViewBtn" class="view-btn active"><i class="ri-layout-grid-line"></i></button>
+                            <button id="listViewBtn" class="view-btn"><i class="ri-list-check"></i></button>
+                        </div>
+                        <button id="themeToggle" class="theme-toggle">
+                            <i class="ri-moon-line"></i>
+                        </button>
+                    </nav>
+                </div>
+            </header>
+
+            <main class="dashboard-main">
+                <div class="dashboard-sidebar">
+                    <div class="sidebar-section">
+                        <h3>Database Insights</h3>
+                        <div class="sidebar-menu">
+                            <button class="menu-item active" data-section="overview">
+                                <i class="ri-dashboard-line"></i> Overview
+                            </button>
+                            <button class="menu-item" data-section="tables">
+                                <i class="ri-table-line"></i> Tables
+                            </button>
+                            <button class="menu-item" data-section="queries">
+                                <i class="ri-search-line"></i> Query Builder
+                            </button>
+                            <button class="menu-item" data-section="realtime">
+                                <i class="ri-line-chart-line"></i> Real-time Monitor
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="sidebar-section">
+                        <h3>Visualizations</h3>
+                        <div class="sidebar-menu">
+                            <button class="menu-item" data-chart="bar">
+                                <i class="ri-bar-chart-horizontal-line"></i> Bar Charts
+                            </button>
+                            <button class="menu-item" data-chart="pie">
+                                <i class="ri-pie-chart-line"></i> Pie Charts
+                            </button>
+                            <button class="menu-item" data-chart="line">
+                                <i class="ri-line-chart-line"></i> Line Charts
+                            </button>
+                            <button class="menu-item" data-chart="advanced">
+                                <i class="ri-bubble-chart-line"></i> Advanced
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-content">
+                    <!-- Overview Section -->
+                    <section id="overview-section" class="content-section active">
+                        <div class="section-header">
+                            <h2>Database Overview</h2>
+                            <button id="refreshBtn" class="refresh-btn">
+                                <i class="ri-refresh-line"></i> Refresh
+                            </button>
+                        </div>
+                        
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <h3>Tables</h3>
+                                <div class="metric-value" id="tableCount">-</div>
+                            </div>
+                            <div class="metric-card">
+                                <h3>Total Rows</h3>
+                                <div class="metric-value" id="totalRows">-</div>
+                            </div>
+                            <div class="metric-card">
+                                <h3>Database Size</h3>
+                                <div class="metric-value" id="dbSize">-</div>
+                            </div>
+                            <div class="metric-card">
+                                <h3>Query Success Rate</h3>
+                                <div class="metric-value" id="querySuccess">-</div>
+                            </div>
+                        </div>
+                        
+                        <div class="charts-grid">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h3>Table Row Counts</h3>
+                                    <div class="chart-controls">
+                                        <select class="items-per-page">
+                                            <option value="5">5 items</option>
+                                            <option value="10" selected>10 items</option>
+                                            <option value="20">20 items</option>
+                                        </select>
+                                        <div class="pagination-controls">
+                                            <button class="pagination-btn" data-action="prev"><i class="ri-arrow-left-s-line"></i></button>
+                                            <span class="page-info">Page <span class="current-page">1</span> of <span class="total-pages">1</span></span>
+                                            <button class="pagination-btn" data-action="next"><i class="ri-arrow-right-s-line"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-loader">
+                                        <div class="spinner"></div>
+                                    </div>
+                                    <canvas id="tableCountChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h3>Data Type Distribution</h3>
+                                    <div class="chart-controls">
+                                        <select class="items-per-page">
+                                            <option value="5">5 items</option>
+                                            <option value="10" selected>10 items</option>
+                                            <option value="20">20 items</option>
+                                        </select>
+                                        <div class="pagination-controls">
+                                            <button class="pagination-btn" data-action="prev"><i class="ri-arrow-left-s-line"></i></button>
+                                            <span class="page-info">Page <span class="current-page">1</span> of <span class="total-pages">1</span></span>
+                                            <button class="pagination-btn" data-action="next"><i class="ri-arrow-right-s-line"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-loader">
+                                        <div class="spinner"></div>
+                                    </div>
+                                    <canvas id="dataTypeChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h3>Query Performance</h3>
+                                    <div class="chart-controls">
+                                        <select class="items-per-page">
+                                            <option value="5">5 items</option>
+                                            <option value="10" selected>10 items</option>
+                                            <option value="20">20 items</option>
+                                        </select>
+                                        <div class="pagination-controls">
+                                            <button class="pagination-btn" data-action="prev"><i class="ri-arrow-left-s-line"></i></button>
+                                            <span class="page-info">Page <span class="current-page">1</span> of <span class="total-pages">1</span></span>
+                                            <button class="pagination-btn" data-action="next"><i class="ri-arrow-right-s-line"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-loader">
+                                        <div class="spinner"></div>
+                                    </div>
+                                    <canvas id="queryPerformanceChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <h3>Real-time Activity</h3>
+                                    <div class="chart-controls">
+                                        <select class="items-per-page">
+                                            <option value="5">5 items</option>
+                                            <option value="10" selected>10 items</option>
+                                            <option value="20">20 items</option>
+                                        </select>
+                                        <div class="pagination-controls">
+                                            <button class="pagination-btn" data-action="prev"><i class="ri-arrow-left-s-line"></i></button>
+                                            <span class="page-info">Page <span class="current-page">1</span> of <span class="total-pages">1</span></span>
+                                            <button class="pagination-btn" data-action="next"><i class="ri-arrow-right-s-line"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-loader">
+                                        <div class="spinner"></div>
+                                    </div>
+                                    <div id="realtimeActivityChart"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- Tables Section -->
+                    <section id="tables-section" class="content-section">
+                        <div class="section-header">
+                            <h2>Table Analysis</h2>
+                            <button id="refreshTablesBtn" class="refresh-btn">
+                                <i class="ri-refresh-line"></i> Refresh
+                            </button>
+                        </div>
+                        
+                        <div class="tables-container">
+                            <div class="tables-sidebar">
+                                <div class="table-selection-panel">
+                                    <h3>Select Table</h3>
+                                    <select id="tableSelector" class="table-select">
+                                        <option value="">Select a table</option>
+                                        <!-- Tables will be populated dynamically -->
+                                    </select>
+                                    
+                                    <div class="row-selection">
+                                        <h3>Data Sample Size</h3>
+                                        <div class="row-input-group">
+                                            <input type="number" id="rowCount" value="1000" min="10" max="100000">
+                                            <span class="input-label">rows</span>
+                                        </div>
+                                        <div class="row-selection-options">
+                                            <button class="row-preset" data-value="100">100</button>
+                                            <button class="row-preset" data-value="1000">1,000</button>
+                                            <button class="row-preset" data-value="10000">10,000</button>
+                                            <button class="row-preset" data-value="all">All</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="column-selection">
+                                        <h3>Column Selection</h3>
+                                        <div id="columnSelector" class="column-list">
+                                            <!-- Columns will be populated dynamically -->
+                                        </div>
+                                    </div>
+                                    
+                                    <button id="analyzeTableBtn" class="analyze-btn">
+                                        <i class="ri-bar-chart-line"></i> Analyze Data
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-analysis-content">
+                                <div class="analysis-header">
+                                    <h3 id="tableAnalysisTitle">Select a table to analyze</h3>
+                                    <div class="view-controls">
+                                        <button class="view-btn active" data-view="charts"><i class="ri-bar-chart-2-line"></i> Charts</button>
+                                        <button class="view-btn" data-view="data"><i class="ri-table-line"></i> Data</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="analysis-views">
+                                    <div id="chartsView" class="analysis-view active">
+                                        <div class="visualizations-container">
+                                            <div id="mainVisualization" class="main-visualization">
+                                                <!-- Main visualization will be rendered here -->
+                                            </div>
+                                            
+                                            <div class="insights-panel">
+                                                <div class="insights-header">
+                                                    <h3>Data Insights</h3>
+                                                </div>
+                                                <div id="insightsContent" class="insights-content">
+                                                    <p class="empty-state">Select a table and analyze data to see insights</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="additional-charts">
+                                            <h3>Additional Visualizations</h3>
+                                            <div id="additionalChartsContainer" class="charts-grid">
+                                                <!-- Additional charts will be rendered here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="dataView" class="analysis-view">
+                                        <div id="dataTableContainer" class="data-table-container">
+                                            <!-- Table content will be dynamically inserted here -->
+                                        </div>
+                                        <div class="pagination-controls">
+                                            <div class="pagination-info">
+                                                <select id="pageSizeSelect" class="page-size-select">
+                                                    <option value="10">10 per page</option>
+                                                    <option value="25">25 per page</option>
+                                                    <option value="50" selected>50 per page</option>
+                                                    <option value="100">100 per page</option>
+                                                </select>
+                                                <span id="paginationInfo"></span>
+                                            </div>
+                                            <div class="pagination-buttons">
+                                                <button id="firstPage" class="pagination-button" title="First Page">
+                                                    <i class="fas fa-angle-double-left"></i>
+                                                </button>
+                                                <button id="prevPage" class="pagination-button" title="Previous Page">
+                                                    <i class="fas fa-angle-left"></i>
+                                                </button>
+                                                <button id="nextPage" class="pagination-button" title="Next Page">
+                                                    <i class="fas fa-angle-right"></i>
+                                                </button>
+                                                <button id="lastPage" class="pagination-button" title="Last Page">
+                                                    <i class="fas fa-angle-double-right"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="chatbot-container" id="chatbotContainer">
+                            <div class="chatbot-header">
+                                <span>Database Assistant</span>
+                            </div>
+                            <div class="chat-messages" id="chatMessages">
+                                <!-- Messages will be added here dynamically -->
+                            </div>
+                            <div class="chat-input-container">
+                                <textarea
+                                    id="chatInput"
+                                    class="chat-input"
+                                    placeholder="Ask me about your data..."
+                                    rows="1"
+                                ></textarea>
+                                <button id="sendMessage" class="send-message">
+                                    <i class="ri-send-plane-fill"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- Query Section -->
+                    <section id="queries-section" class="content-section">
+                    <div class="section-header">
+                            <h2>Query Builder</h2>
+                        <div class="query-actions">
+                            <button id="clearQueryBtn" class="clear-btn">
+                                <i class="ri-close-line"></i> Clear
+                            </button>
+                            <button id="executeQueryBtn" class="execute-btn">
+                                <i class="ri-play-line"></i> Execute
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="query-input-container">
+                        <textarea 
+                            id="queryInput" 
+                                placeholder="Enter your SQL query or use natural language (e.g., 'Show me all tables' or 'SELECT * FROM users')"
+                            spellcheck="false"
+                        ></textarea>
+                    </div>
+
+                    <div id="queryStatus" class="query-status"></div>
+
+                    <div id="queryResultsContainer" class="results-container">
+                        <div class="results-grid">
+                            <!-- Dynamic charts and results will be inserted here -->
+                        </div>
+                    </div>
+                </section>
+
+                    <!-- Real-time Section -->
+                    <section id="realtime-section" class="content-section">
+                        <div class="section-header">
+                            <h2>Real-time Monitoring</h2>
+                            <div class="realtime-controls">
+                                <select id="updateInterval">
+                                    <option value="1000">1 second</option>
+                                    <option value="5000" selected>5 seconds</option>
+                                    <option value="10000">10 seconds</option>
+                                    <option value="30000">30 seconds</option>
+                                </select>
+                                <button id="startMonitoring" class="start-btn">
+                                    <i class="ri-play-line"></i> Start
+                                </button>
+                                <button id="stopMonitoring" class="stop-btn" disabled>
+                                    <i class="ri-stop-line"></i> Stop
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="realtime-grid">
+                            <div class="chart-card large">
+                                <h3>Connection Count (Live)</h3>
+                                <canvas id="connectionsChart"></canvas>
+                            </div>
+                            <div class="chart-card large">
+                                <h3>Query Execution Time (Live)</h3>
+                                <canvas id="queryTimeChart"></canvas>
+                            </div>
+                            <div class="chart-card">
+                                <h3>Active Tables</h3>
+                                <div id="activeTablesChart"></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>Database Metrics</h3>
+                                <div id="dbMetricsGauge"></div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+
+            <footer class="dashboard-footer">
+                <p>© 2024 PostgreSQL Dashboard | Powered by D3.js and Chart.js</p>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="scripts/database.js"></script>
+    <script src="scripts/table-data.js"></script>
+    <script src="scripts/table-analysis.js"></script>
+    <script src="scripts/table-insights.js"></script>
+    <script src="scripts/table-visualization.js"></script>
+    <script src="scripts/chatbot.js"></script>
+    <script src="scripts/charts.js"></script>
+    <script src="scripts/realtime.js"></script>
+    <script src="scripts/advanced-charts.js"></script>
+    <script>
+        // Global error handler
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('Global error:', { msg, url, lineNo, columnNo, error });
+            const errorContainer = document.getElementById('errorContainer');
+            if (errorContainer) {
+                errorContainer.innerHTML = `
+                    <div class="error-state">
+                        <i class="ri-error-warning-line"></i>
+                        <p>An error occurred: ${msg}</p>
+                        <button onclick="window.location.reload()" class="retry-btn">
+                            <i class="ri-refresh-line"></i> Retry
+                        </button>
+                    </div>
+                `;
+                errorContainer.style.display = 'block';
+            }
+            return false;
+        };
+
+        // Show loading overlay
+        function showLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.style.display = 'flex';
+        }
+
+        // Hide loading overlay
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                showLoading();
+                console.log('Initializing application...');
+                
+                // Check if database object is available
+                if (typeof window.database === 'undefined') {
+                    throw new Error('Database module not loaded properly');
+                }
+                
+                // Initialize database connection
+                await window.database.connect();
+                console.log('Database connection established');
+                
+                // Update connection status
+                const connectionStatus = document.getElementById('connectionStatus');
+                if (connectionStatus) {
+                    connectionStatus.innerHTML = `
+                        <div class="connection-status success">
+                            <i class="ri-checkbox-circle-line"></i>
+                            Connected to database
+                        </div>
+                    `;
+                }
+                
+                hideLoading();
+            } catch (error) {
+                console.error('Application initialization failed:', error);
+                hideLoading();
+                
+                const errorContainer = document.getElementById('errorContainer');
+                if (errorContainer) {
+                    errorContainer.innerHTML = `
+                        <div class="error-state">
+                            <i class="ri-error-warning-line"></i>
+                            <p>Failed to initialize the application: ${error.message}</p>
+                            <button onclick="window.location.reload()" class="retry-btn">
+                                <i class="ri-refresh-line"></i> Retry
+                            </button>
+                        </div>
+                    `;
+                    errorContainer.style.display = 'block';
+                }
+            }
+        });
+    </script>
+</body>
+</html>
